@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x64 (bundled DLL)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - run: dotnet test IGzip.Bindings.sln --configuration Release
+
+  macos:
+    name: macOS arm64 (bundled dylib)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+      - run: dotnet test IGzip.Bindings.sln --configuration Release
+
+  # Official .NET SDK images, distro runtime package only. The -dev package (and its unversioned
+  # libisal.so symlink) is deliberately absent so the versioned-SONAME probe is what resolves.
+  linux-runtime-only:
+    name: ${{ matrix.name }} (runtime package only)
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian 13
+            runner: ubuntu-latest
+            image: mcr.microsoft.com/dotnet/sdk:11.0
+            install: apt-get update -qq && apt-get install -y -qq libisal2
+          - name: Ubuntu 26.04
+            runner: ubuntu-latest
+            image: mcr.microsoft.com/dotnet/sdk:11.0-resolute
+            install: apt-get update -qq && apt-get install -y -qq libisal2
+          - name: Debian 13 arm64
+            runner: ubuntu-24.04-arm
+            image: mcr.microsoft.com/dotnet/sdk:11.0
+            install: apt-get update -qq && apt-get install -y -qq libisal2
+          - name: Alpine (musl)
+            runner: ubuntu-latest
+            image: mcr.microsoft.com/dotnet/sdk:11.0-alpine
+            install: apk add --no-cache isa-l
+    env:
+      ISAL_TEST_MODE: runtime-only
+    steps:
+      - uses: actions/checkout@v7
+      - run: ${{ matrix.install }}
+      # Load-bearing: if a base image ever ships the unversioned symlink, resolution would succeed on the
+      # plain-name step and this job would silently stop exercising the versioned probe.
+      - name: Assert the unversioned symlink is absent
+        shell: sh
+        run: |
+          if ls /usr/lib/libisal.so /usr/lib/*/libisal.so 2>/dev/null; then
+            echo "libisal.so symlink present - this job is not testing what it claims" >&2
+            exit 1
+          fi
+      - run: dotnet test IGzip.Bindings.sln --configuration Release -f net11.0
+
+  # Distros without an official .NET SDK image: install the SDK with dotnet-install.sh.
+  linux-other:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04 (runtime package only)
+            image: ubuntu:24.04
+            install: apt-get update -qq && apt-get install -y -qq libisal2 libicu74 curl ca-certificates
+            mode: runtime-only
+          - name: Fedora (runtime package only)
+            image: fedora:latest
+            install: dnf install -y -q isa-l libicu curl tar gzip findutils
+            mode: runtime-only
+          - name: Rocky 9 + EPEL (runtime package only)
+            image: rockylinux:9
+            install: dnf install -y -q epel-release && dnf install -y -q isa-l libicu tar gzip findutils
+            mode: runtime-only
+          - name: Arch (ships the unversioned symlink)
+            image: archlinux:latest
+            install: pacman -Syu --noconfirm --quiet isa-l icu curl
+            mode: dev
+    env:
+      ISAL_TEST_MODE: ${{ matrix.mode }}
+      DOTNET_ROOT: /opt/dotnet
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+    steps:
+      - run: ${{ matrix.install }}
+      - uses: actions/checkout@v7
+      # Called by full path: adding to GITHUB_PATH in a container job replaces PATH outright on images that
+      # do not declare one (rockylinux), leaving the next step without even sh.
+      - name: Install the .NET SDK
+        run: |
+          curl -sSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+          bash /tmp/dotnet-install.sh --channel 11.0 --install-dir /opt/dotnet
+      - run: /opt/dotnet/dotnet test IGzip.Bindings.sln --configuration Release -f net11.0
+
+  linux-dev-package:
+    name: Debian 13 (-dev installed, regression guard)
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/dotnet/sdk:11.0
+    env:
+      ISAL_TEST_MODE: dev
+    steps:
+      - uses: actions/checkout@v7
+      - run: apt-get update -qq && apt-get install -y -qq libisal-dev
+      - run: dotnet test IGzip.Bindings.sln --configuration Release -f net11.0
+
+  linux-missing:
+    name: Linux (no native library)
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/dotnet/sdk:11.0
+    env:
+      ISAL_TEST_MODE: missing
+    steps:
+      - uses: actions/checkout@v7
+      - run: >
+          dotnet test IGzip.Bindings.sln --configuration Release -f net11.0
+          --filter FullyQualifiedName~NativeResolutionTests
+
+  # IGzipBinding hard-codes ISA-L struct offsets. Compile a probe against each distro's own headers and
+  # fail if any size, offset or constant differs from what the binding uses.
+  abi:
+    name: Struct layout (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:trixie
+            install: apt-get update -qq && apt-get install -y -qq gcc libc6-dev libisal-dev
+          - image: ubuntu:22.04
+            install: apt-get update -qq && apt-get install -y -qq gcc libc6-dev libisal-dev
+          - image: fedora:latest
+            install: dnf install -y -q gcc diffutils isa-l-devel
+          - image: rockylinux:9
+            install: dnf install -y -q epel-release && dnf install -y -q gcc diffutils isa-l-devel
+          - image: alpine:latest
+            install: apk add --no-cache gcc musl-dev isa-l-dev
+          - image: archlinux:latest
+            install: pacman -Syu --noconfirm --quiet gcc diffutils isa-l
+    steps:
+      - run: ${{ matrix.install }}
+      - uses: actions/checkout@v7
+      - name: Compare against abi/expected.txt
+        shell: sh
+        run: |
+          gcc -o /tmp/abi abi/abi.c
+          /tmp/abi | sed 's/ *$//' > /tmp/actual.txt
+          diff -u abi/expected.txt /tmp/actual.txt

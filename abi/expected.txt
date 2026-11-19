@@ -1,0 +1,3 @@
+zstream=82384 isal_zstream.next_in=0 isal_zstream.avail_in=8 isal_zstream.next_out=16 isal_zstream.avail_out=24 isal_zstream.level=40 isal_zstream.level_buf_size=44 isal_zstream.level_buf=48 isal_zstream.end_of_stream=56 isal_zstream.flush=58 isal_zstream.gzip_flag=60 isal_zstream.hist_bits=62 isal_zstream.internal_state=64
+inflate=87368 inflate_state.next_out=0 inflate_state.avail_out=8 inflate_state.next_in=16 inflate_state.avail_in=32 inflate_state.crc_flag=21172 inflate_state.hist_bits=21180
+const LVL1_SMALL=86016 LVL2_SMALL=135168 LVL3_SMALL=151552 IGZIP_ZLIB=3 ISAL_ZLIB=3

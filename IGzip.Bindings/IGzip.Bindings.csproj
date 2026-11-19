@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <Authors>Kamron Batman</Authors>
+        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+        <LangVersion>preview</LangVersion>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <PackageVersion>1.0.0</PackageVersion>
+        <RootNamespace>System.IO.Compression</RootNamespace>
+        <AssemblyName>IGzip.Bindings</AssemblyName>
+        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+        <Configurations>Debug;Release;Analyze</Configurations>
+        <NoWarn>NU1603</NoWarn>
+        <RuntimeIdentifiers>win-x64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Copyright>Copyright (c) 2026, Kamron Batman</Copyright>
+        <PackageLicenseExpression>BSD-2-Clause</PackageLicenseExpression>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <PackageProjectUrl>https://github.com/modernuo/IGzip.Bindings</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/modernuo/IGzip.Bindings</RepositoryUrl>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageTags>isa-l;igzip;zlib;deflate;gzip;compression</PackageTags>
+        <Description>Intel ISA-L igzip bindings for .NET 10+: one-shot zlib, raw deflate and gzip over Span&lt;byte&gt;. Bundles win-x64 and osx-arm64; Linux uses the distro's libisal.</Description>
+        <Optimize>true</Optimize>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
+        <Content Include="runtimes\win-x64\native\isa-l.dll">
+            <Pack>true</Pack>
+            <PackagePath>runtimes/win-x64/native</PackagePath>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="runtimes\osx-arm64\native\libisal.dylib">
+            <Pack>true</Pack>
+            <PackagePath>runtimes/osx-arm64/native</PackagePath>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+</Project>
